@@ -41,7 +41,7 @@ jobs:
           for rule_file in $(find custom -type f -name '*.yaml'); do
             echo "Deploying rule from file: $rule_file"
             
-            # Debug: Show the YAML structure
+            # Show YAML structure 
             echo "YAML file contents:"
             cat "$rule_file"
             
