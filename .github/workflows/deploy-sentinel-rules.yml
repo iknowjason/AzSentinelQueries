@@ -1,0 +1,137 @@
+name: Deploy Custom Sentinel Analytic Rules
+
+on:
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  deploy-custom-rules:
+    runs-on: ubuntu-latest
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ env.ARM_CLIENT_ID }}",
+              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
+              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ env.ARM_TENANT_ID }}"
+            }
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.35.1/yq_linux_amd64
+          sudo chmod +x /usr/bin/yq
+
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Deploy each custom rule
+        run: |
+          for rule_file in $(find custom -type f -name '*.yaml'); do
+            echo "Deploying rule from file: $rule_file"
+            
+            # Debug: Show the YAML structure
+            echo "YAML file contents:"
+            cat "$rule_file"
+            
+            # Check if automationPlaybooks key exists at all in the YAML
+            has_playbooks=$(yq eval 'has("automationPlaybooks")' "$rule_file")
+            echo "Has automationPlaybooks key: $has_playbooks"
+            
+            # Only try to extract if the key exists
+            if [ "$has_playbooks" = "true" ]; then
+              # Get the playbook array length to check if it's empty
+              playbook_count=$(yq eval '.automationPlaybooks | length' "$rule_file")
+              echo "Number of automation playbooks: $playbook_count"
+              
+              if [ "$playbook_count" -gt 0 ]; then
+                automationPlaybookId=$(yq eval '.automationPlaybooks[0].resourceId' "$rule_file")
+                echo "Found Automation Playbook ID: $automationPlaybookId"
+              else
+                automationPlaybookId=""
+                echo "Automation Playbooks array is empty"
+              fi
+            else
+              automationPlaybookId=""
+              echo "No Automation Playbooks key found in YAML"
+            fi
+            
+            # Convert the YAML rule file to JSON
+            yq eval -o=json "$rule_file" > temp_rule.json
+
+            # Perform necessary JSON transformations
+            jq 'if has("queryFrequency") then
+                   .queryFrequency |= (
+                     if test("^[0-9]+m$") then "PT" + (. | capture("^(?<minutes>[0-9]+)m").minutes) + "M"
+                     elif test("^[0-9]+h$") then "PT" + (. | capture("^(?<hours>[0-9]+)h").hours) + "H"
+                     elif test("^[0-9]+d$") then "P" + (. | capture("^(?<days>[0-9]+)d").days) + "D"
+                     else .
+                     end
+                   )
+                 else . end |
+                 if has("queryPeriod") then
+                   .queryPeriod |= (
+                     if test("^[0-9]+m$") then "PT" + (. | capture("^(?<minutes>[0-9]+)m").minutes) + "M"
+                     elif test("^[0-9]+h$") then "PT" + (. | capture("^(?<hours>[0-9]+)h").hours) + "H"
+                     elif test("^[0-9]+d$") then "P" + (. | capture("^(?<days>[0-9]+)d").days) + "D"
+                     else .
+                     end
+                   )
+                 else . end |
+                 if has("triggerOperator") then
+                   .triggerOperator |= (if . == "gt" then "GreaterThan" else . end)
+                 else . end |
+                 if (.incidentConfiguration | has("groupingConfiguration")) then
+                   .incidentConfiguration.groupingConfiguration.lookbackDuration |= (
+                     if test("^[0-9]+h$") then "PT" + (. | capture("^(?<hours>[0-9]+)h").hours) + "H"
+                     elif test("^[0-9]+d$") then "P" + (. | capture("^(?<days>[0-9]+)d").days) + "D"
+                     else .
+                     end
+                   )
+                 else . end |
+                 if has("suppressionDuration") then
+                   .suppressionDuration |= (if test("^[0-9]+h$") then "PT" + (. | capture("^(?<hours>[0-9]+)h").hours) + "H" else . end)
+                 else . end |
+                 if (has("displayName") | not) then
+                   .displayName = .name
+                 else . end |
+                 if (has("enabled") | not) then
+                   .enabled = true
+                 else . end |
+                 # Remove automationPlaybooks from rule data to prevent duplication
+                 del(.automationPlaybooks)' temp_rule.json > converted_rule.json
+
+            rule_name=$(basename "$rule_file" .yaml)
+            echo "Rule name: $rule_name"
+
+            # Conditional deployment based on whether automationPlaybookId exists and is not empty
+            if [ -n "$automationPlaybookId" ] && [ "$automationPlaybookId" != "null" ]; then
+              echo "Using Automation Playbook ID: $automationPlaybookId"
+              az deployment group create \
+                --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+                --template-file templates/arm-template.json \
+                --parameters workspace="${{ secrets.AZURE_WORKSPACE_NAME }}" \
+                 ruleName="$rule_name" \
+                 ruleData=@converted_rule.json \
+                 automationPlaybookId="$automationPlaybookId"
+            else
+              echo "No Automation Playbook ID provided in YAML, proceeding without it."
+              az deployment group create \
+                --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+                --template-file templates/arm-template.json \
+                --parameters workspace="${{ secrets.AZURE_WORKSPACE_NAME }}" \
+                 ruleName="$rule_name" \
+                 ruleData=@converted_rule.json
+            fi
+          done
