@@ -21,10 +21,10 @@ jobs:
         with:
           creds: |
             {
-              "clientId": "${{ env.ARM_CLIENT_ID }}",
-              "clientSecret": "${{ env.ARM_CLIENT_SECRET }}",
-              "subscriptionId": "${{ env.ARM_SUBSCRIPTION_ID }}",
-              "tenantId": "${{ env.ARM_TENANT_ID }}"
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
             }
 
       - name: Install yq
@@ -41,7 +41,7 @@ jobs:
           for rule_file in $(find custom -type f -name '*.yaml'); do
             echo "Deploying rule from file: $rule_file"
             
-            # Debug: Show the YAML structure
+            # Show YAML structure 
             echo "YAML file contents:"
             cat "$rule_file"
             
