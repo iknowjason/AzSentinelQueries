@@ -3,11 +3,6 @@ name: Sentinel Analytics Rules Testing
 on:
   pull_request:
     branches: [ "*" ]
-    paths:
-      - 'custom/**'
-      - 'tests/**'
-      - 'test_data/**'
-  workflow_dispatch:
 
 jobs:
   test-rules:
