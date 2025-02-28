@@ -220,9 +220,9 @@ class SentinelTestFramework:
             raise ValueError("Rule definition must contain a query field")
             
         # Always set a fast query frequency and period for testing
-        test_rule['queryFrequency'] = 'PT10S'  # 10 seconds
-        test_rule['queryPeriod'] = 'PT10S'  # 10 seconds
-        print("Set queryFrequency and queryPeriod to 10 seconds for faster testing")
+        test_rule['queryFrequency'] = 'PT5M'  
+        test_rule['queryPeriod'] = 'PT5M' 
+        print("Set queryFrequency and queryPeriod to 5 minutes (minimum allowed)")
             
         # Convert duration fields to ISO8601 format (for any other duration fields still in the rule)
         duration_fields = ['suppressionDuration']
@@ -596,7 +596,8 @@ class SentinelTestFramework:
             # Wait for rule to run on its scheduled frequency
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT10S)")
             print(f"Rule should run multiple times in this period...")
-            time.sleep(90)  # Wait 90 seconds to allow for multiple rule execution cycles
+            print("Waiting for rule to execute at least once (with 5-minute frequency)...")
+            time.sleep(360)  
             
             # Check for alerts
             found_alert, incidents_detail = self.check_for_alerts(test_rule_id)
