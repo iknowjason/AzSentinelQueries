@@ -139,7 +139,6 @@ class SentinelTestFramework:
             days = re.match(r'^(\d+)d$', duration_str).group(1)
             return f"P{days}D"
             
-        # Return original if no match
         return duration_str
         
     def convert_trigger_operator(self, operator):
@@ -593,7 +592,6 @@ class SentinelTestFramework:
             # Ingest test data
             self.ingest_test_data(test_config['test_table'], test_case['data_file'])
             
-            # Wait for rule to run on its scheduled frequency
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT10S)")
             print(f"Rule should run multiple times in this period...")
             print("Waiting for rule to execute at least once (with 5-minute frequency)...")
