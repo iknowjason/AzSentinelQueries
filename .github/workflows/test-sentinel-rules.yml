@@ -29,18 +29,13 @@ jobs:
       - name: Run Test Framework
         run: python .github/scripts/run_sentinel_tests.py
         env:
-          # Azure Authentication
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           
-          # Azure Resource Information
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
           WORKSPACE_NAME: ${{ secrets.WORKSPACE_NAME }}
           
-          # Log Ingestion Configuration
           ENDPOINT_URI: ${{ secrets.ENDPOINT_URI }}
           DCR_IMMUTABLEID: ${{ secrets.DCR_IMMUTABLEID }}
-
-
