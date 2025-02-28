@@ -199,7 +199,6 @@ class SentinelTestFramework:
         if 'id' in rule_def:
             # Add timestamp to ensure uniqueness
             test_rule['id'] = f"test_{rule_def['id']}_{int(time.time())}"
-            #test_rule['id'] = f"test_{rule_def['id']}"
         else:
             test_rule['id'] = f"test_rule_{int(time.time())}"
             
@@ -220,8 +219,13 @@ class SentinelTestFramework:
             print("ERROR: Could not find 'query' field in rule definition")
             raise ValueError("Rule definition must contain a query field")
             
-        # Convert duration fields to ISO8601 format
-        duration_fields = ['queryFrequency', 'queryPeriod', 'suppressionDuration']
+        # Always set a fast query frequency and period for testing
+        test_rule['queryFrequency'] = 'PT10S'  # 10 seconds
+        test_rule['queryPeriod'] = 'PT10S'  # 10 seconds
+        print("Set queryFrequency and queryPeriod to 10 seconds for faster testing")
+            
+        # Convert duration fields to ISO8601 format (for any other duration fields still in the rule)
+        duration_fields = ['suppressionDuration']
         for field in duration_fields:
             if field in test_rule:
                 test_rule[field] = self.convert_duration_to_iso8601(test_rule[field])
@@ -253,8 +257,6 @@ class SentinelTestFramework:
         
         # Set defaults for missing fields if needed
         defaults = {
-            'queryFrequency': 'PT1H',  # 1 hour
-            'queryPeriod': 'PT1H',     # 1 hour
             'severity': 'Medium',
             'triggerOperator': 'GreaterThan',
             'triggerThreshold': 0,
@@ -336,56 +338,12 @@ class SentinelTestFramework:
             print(f"Rule creation payload: {json.dumps({k: v for k, v in test_rule.items() if k != 'query'}, indent=2)}")
             raise
 
-    def run_rule(self, rule_id):
-        try:
-            if hasattr(self.sentinel_client, 'scheduled_analytics_rules') and hasattr(self.sentinel_client.scheduled_analytics_rules, 'run'):
-                self.sentinel_client.scheduled_analytics_rules.run(
-                    resource_group_name=RESOURCE_GROUP,
-                    workspace_name=WORKSPACE_NAME,
-                    rule_id=rule_id
-                )
-            elif hasattr(self.sentinel_client, 'alert_rules') and hasattr(self.sentinel_client.alert_rules, 'run'):
-                self.sentinel_client.alert_rules.run(
-                    resource_group_name=RESOURCE_GROUP,
-                    workspace_name=WORKSPACE_NAME,
-                    rule_id=rule_id
-                )
-            else:
-                print("Using direct API call")
-                import requests
-                
-                token = self.credential.get_token("https://management.azure.com/.default").token
-                api_version = "2022-09-01-preview"
-                
-                url = (
-                    f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
-                    f"/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}"
-                    f"/providers/Microsoft.SecurityInsights/alertRules/{rule_id}/run?api-version={api_version}"
-                )
-                
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
-                }
-                
-                response = requests.post(url, headers=headers)
-                
-                if response.status_code >= 400:
-                    print(f"Error running rule via direct API: {response.status_code} - {response.text}")
-                    raise HttpResponseError(response=response)
-                
-            print(f"Triggered execution of rule: {rule_id}")
-            print("Waiting for rule to execute")
-            time.sleep(60)
-            
-        except Exception as e:
-            print(f"Failed to run rule: {e}")
-            raise
-
     def check_for_alerts(self, rule_id, timeout=120):
-        """Check if rule generated any alerts/incidents"""
+        """Check if rule generated any alerts/incidents and return details"""
         print(f"Checking for incidents related to rule: {rule_id}")
         start_time = time.time()
+        incidents_found = []
+        
         while time.time() - start_time < timeout:
             try:
                 # First try the incidents API
@@ -407,11 +365,27 @@ class SentinelTestFramework:
                         # Check if incident is related to our test rule
                         if incident.title and rule_id in incident.title:
                             print(f"Found incident from rule {rule_id}: {incident.title}")
-                            return True
+                            incidents_found.append({
+                                "title": incident.title,
+                                "id": incident.name,
+                                "severity": incident.severity,
+                                "status": incident.status,
+                                "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
+                            })
+                            return True, incidents_found
                         elif hasattr(incident, 'alert_ids') and incident.alert_ids:
-                            # Check alert details if incident title doesn't contain rule ID
-                            print(f"Checking alert details for incident: {incident.title}")
-                            # This would require additional API calls to check alert details
+                            # Check if any alert IDs match our rule ID pattern
+                            for alert_id in incident.alert_ids:
+                                if rule_id in alert_id:
+                                    print(f"Found incident with matching alert ID: {incident.title}")
+                                    incidents_found.append({
+                                        "title": incident.title,
+                                        "id": incident.name,
+                                        "severity": incident.severity,
+                                        "status": incident.status,
+                                        "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
+                                    })
+                                    return True, incidents_found
                 
                 # Alternatively, check the alert API directly
                 elif hasattr(self.sentinel_client, 'alerts'):
@@ -430,7 +404,14 @@ class SentinelTestFramework:
                     for alert in alerts_list:
                         if alert.alert_display_name and rule_id in alert.alert_display_name:
                             print(f"Found alert from rule {rule_id}: {alert.alert_display_name}")
-                            return True
+                            incidents_found.append({
+                                "title": alert.alert_display_name,
+                                "id": alert.name if hasattr(alert, 'name') else "Unknown",
+                                "severity": alert.alert_severity if hasattr(alert, 'alert_severity') else "Unknown",
+                                "status": "New",
+                                "created_time": str(alert.start_time) if hasattr(alert, 'start_time') else "Unknown"
+                            })
+                            return True, incidents_found
                 
                 # If neither API is available, try using direct REST API call
                 else:
@@ -461,7 +442,14 @@ class SentinelTestFramework:
                                     title = incident['properties']['title']
                                     if rule_id in title:
                                         print(f"Found incident from rule {rule_id}: {title}")
-                                        return True
+                                        incidents_found.append({
+                                            "title": title,
+                                            "id": incident.get('name', 'Unknown'),
+                                            "severity": incident.get('properties', {}).get('severity', 'Unknown'),
+                                            "status": incident.get('properties', {}).get('status', 'Unknown'),
+                                            "created_time": incident.get('properties', {}).get('createdTimeUtc', 'Unknown')
+                                        })
+                                        return True, incidents_found
                     else:
                         print(f"Warning: Failed to get incidents via direct API: {response.status_code}")
                 
@@ -473,10 +461,14 @@ class SentinelTestFramework:
                 time.sleep(15)
         
         print(f"No matching incidents found after {timeout} seconds")
-        return False
+        return False, incidents_found
 
     def cleanup_test_rule(self, rule_id):
         """Clean up the test rule after testing"""
+        print(f"NOTICE: Test rule {rule_id} was NOT deleted for manual inspection")
+        print(f"Please manually delete or disable this rule after inspection")
+        # Commented out cleanup for manual inspection purposes
+        '''
         try:
             # Try different method names based on SDK version
             if hasattr(self.sentinel_client, 'scheduled_analytics_rules'):
@@ -523,6 +515,7 @@ class SentinelTestFramework:
         except Exception as e:
             print(f"Warning: Failed to delete test rule {rule_id}: {e}")
             # Continue execution even if cleanup fails
+        '''
 
     def run_tests(self):
         """Run all tests"""
@@ -555,59 +548,21 @@ class SentinelTestFramework:
                 "test_cases": []
             }
             
-            # Run test cases
-            for test_case in test_config['test_cases']:
-                print(f"\nRunning test case: {test_case['name']}")
-                test_rule_id = None
-                
-                try:
-                    # Clone rule first to be ready before data ingestion
-                    test_rule_id = self.clone_rule_for_testing(prod_rule, test_config['test_table'])
-                    
-                    # Ingest test data
-                    self.ingest_test_data(test_config['test_table'], test_case['data_file'])
-                    
-                    # Run rule
-                    self.run_rule(test_rule_id)
-                    
-                    # Check for alerts
-                    found_alert = self.check_for_alerts(test_rule_id)
-                    
-                    # Evaluate test result
-                    expected_alert = test_case['expected_result'] == 'alert'
-                    case_passed = found_alert == expected_alert
-                    
-                    if case_passed:
-                        print(f"✅ Test case passed: {test_case['name']}")
-                        results["passed"] += 1
-                    else:
-                        print(f"❌ Test case failed: {test_case['name']}")
-                        print(f"   Expected {'an alert' if expected_alert else 'no alert'}, but {'found an alert' if found_alert else 'found no alert'}")
-                        results["failed"] += 1
-                    
-                    test_result["test_cases"].append({
-                        "name": test_case['name'],
-                        "passed": case_passed,
-                        "expected": test_case['expected_result'],
-                        "actual": "alert" if found_alert else "no_alert"
-                    })
-                    
-                except Exception as e:
-                    print(f"❌ Error running test case: {e}")
-                    results["failed"] += 1
-                    test_result["test_cases"].append({
-                        "name": test_case['name'],
-                        "passed": False,
-                        "error": str(e)
-                    })
-                
-                finally:
-                    # Clean up
-                    if test_rule_id:
-                        try:
-                            self.cleanup_test_rule(test_rule_id)
-                        except:
-                            print("Warning: Cleanup may have failed")
+            # Organize test cases into positive and negative tests
+            positive_cases = [tc for tc in test_config['test_cases'] if tc['expected_result'] == 'alert']
+            negative_cases = [tc for tc in test_config['test_cases'] if tc['expected_result'] == 'no_alert']
+            
+            # Run positive test cases first
+            if positive_cases:
+                print("\n=== Running Positive Test Cases (expected to trigger alerts) ===")
+                for test_case in positive_cases:
+                    self._run_test_case(test_case, prod_rule, test_config, test_result, results)
+            
+            # Then run negative test cases
+            if negative_cases:
+                print("\n=== Running Negative Test Cases (expected NOT to trigger alerts) ===")
+                for test_case in negative_cases:
+                    self._run_test_case(test_case, prod_rule, test_config, test_result, results)
             
             results["tests"].append(test_result)
         
@@ -625,6 +580,61 @@ class SentinelTestFramework:
         # Exit with non-zero code if any tests failed
         if results['failed'] > 0:
             exit(1)
+            
+    def _run_test_case(self, test_case, prod_rule, test_config, test_result, results):
+        """Run an individual test case"""
+        print(f"\nRunning test case: {test_case['name']}")
+        test_rule_id = None
+        
+        try:
+            # Clone rule first to be ready before data ingestion
+            test_rule_id = self.clone_rule_for_testing(prod_rule, test_config['test_table'])
+            
+            # Ingest test data
+            self.ingest_test_data(test_config['test_table'], test_case['data_file'])
+            
+            # Wait for rule to run on its scheduled frequency
+            print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT10S)")
+            print(f"Rule should run multiple times in this period...")
+            time.sleep(90)  # Wait 90 seconds to allow for multiple rule execution cycles
+            
+            # Check for alerts
+            found_alert, incidents_detail = self.check_for_alerts(test_rule_id)
+            
+            # Evaluate test result
+            expected_alert = test_case['expected_result'] == 'alert'
+            case_passed = found_alert == expected_alert
+            
+            if case_passed:
+                print(f"✅ Test case passed: {test_case['name']}")
+                results["passed"] += 1
+            else:
+                print(f"❌ Test case failed: {test_case['name']}")
+                print(f"   Expected {'an alert' if expected_alert else 'no alert'}, but {'found an alert' if found_alert else 'found no alert'}")
+                results["failed"] += 1
+            
+            test_result["test_cases"].append({
+                "name": test_case['name'],
+                "passed": case_passed,
+                "expected": test_case['expected_result'],
+                "actual": "alert" if found_alert else "no_alert",
+                "incidents_found": incidents_detail
+            })
+            
+        except Exception as e:
+            print(f"❌ Error running test case: {e}")
+            results["failed"] += 1
+            test_result["test_cases"].append({
+                "name": test_case['name'],
+                "passed": False,
+                "error": str(e),
+                "incidents_found": []
+            })
+        
+        finally:
+            # Note but don't delete the test rule
+            if test_rule_id:
+                self.cleanup_test_rule(test_rule_id)
 
 
 if __name__ == "__main__":
