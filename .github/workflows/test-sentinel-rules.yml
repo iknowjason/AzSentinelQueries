@@ -42,3 +42,5 @@ jobs:
           # Log Ingestion Configuration
           ENDPOINT_URI: ${{ secrets.ENDPOINT_URI }}
           DCR_IMMUTABLEID: ${{ secrets.DCR_IMMUTABLEID }}
+
+
