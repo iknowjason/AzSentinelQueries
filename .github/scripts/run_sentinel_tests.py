@@ -332,7 +332,7 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        if created_after and hasattr(incident, 'created_time') and incident.created_time:
+                        """if created_after and hasattr(incident, 'created_time') and incident.created_time:
 
                             incident_time = None
                             if isinstance(incident.created_time, datetime):
@@ -345,7 +345,7 @@ class SentinelTestFramework:
                 
                         if incident_time and incident_time.replace(tzinfo=None) < created_after:
                             print(f"Skipping previously created incident: {incident.title}")
-                            continue
+                            continue"""
 
                         if incident.title:
                             print(rule_display_name)
