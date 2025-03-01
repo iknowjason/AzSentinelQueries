@@ -345,14 +345,12 @@ class SentinelTestFramework:
         
         while time.time() - start_time < timeout:
             try:
-                # First try the incidents API
                 if hasattr(self.sentinel_client, 'incidents'):
                     incidents = self.sentinel_client.incidents.list(
                         resource_group_name=RESOURCE_GROUP,
                         workspace_name=WORKSPACE_NAME
                     )
                     
-                    # Convert iterator to list so we can iterate multiple times
                     incidents_list = list(incidents)
                     
                     if not incidents_list:
@@ -361,8 +359,9 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
+                        print(incident)
                         if incident.title:
-
+                            # JASON
                             test_rule_name = None
                             if 'displayName' in test_rule:
                                 test_rule_name = test_rule['displayName']
@@ -392,7 +391,6 @@ class SentinelTestFramework:
                                     })
                                     return True, incidents_found
                 
-                # Alternatively, check the alert API directly
                 elif hasattr(self.sentinel_client, 'alerts'):
                     alerts = self.sentinel_client.alerts.list(
                         resource_group_name=RESOURCE_GROUP,
@@ -598,9 +596,9 @@ class SentinelTestFramework:
             # Ingest test data
             self.ingest_test_data(test_config['test_table'], test_case['data_file'])
             
-            print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT10S)")
-            print(f"Rule should run multiple times in this period...")
-            print("Waiting for rule to execute at least once (with 5-minute frequency)...")
+            print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
+            print(f"Rule should run multiple times in this period")
+            print("Waiting for rule to execute at least once (with 5-minute frequency)")
             time.sleep(360)  
             
             # Check for alerts
