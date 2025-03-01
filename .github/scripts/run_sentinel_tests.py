@@ -332,20 +332,24 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-
                         if created_after and hasattr(incident, 'created_time') and incident.created_time:
-                            incident_time = incident.created_time
-                            if isinstance(incident_time, str):
+
+                            incident_time = None
+                            if isinstance(incident.created_time, datetime):
+                                incident_time = incident.created_time
+                            elif isinstance(incident.created_time, str):
                                 try:
-                                    incident_time = datetime.fromisoformat(incident_time.replace('Z', '+00:00'))
+                                    incident_time = datetime.fromisoformat(incident.created_time.replace('Z', '+00:00'))
                                 except:
-                                    incident_time = None
+                                    print(f"Warning: Could not parse incident created time: {incident.created_time}")
                 
                         if incident_time and incident_time.replace(tzinfo=None) < created_after:
                             print(f"Skipping previously created incident: {incident.title}")
                             continue
 
                         if incident.title:
+                            print(rule_display_name)
+                            print(incident.title)
                             if rule_display_name in incident.title:
                                 print(f"Found matching incident: {incident.title}") 
                                 incidents_found.append({
@@ -493,7 +497,6 @@ class SentinelTestFramework:
         
         try:
 
-            # Record the time before injecting test data
             test_start_time = datetime.utcnow()
             print(f"Test start time: {test_start_time.isoformat()}")
 
@@ -507,7 +510,6 @@ class SentinelTestFramework:
             self.ingest_test_data(test_config['test_table'], test_case['data_file'])
             
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
-            print(f"Rule should run multiple times in this period")
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
             time.sleep(310)
 
