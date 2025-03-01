@@ -332,9 +332,10 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        if created_after and hasattr(incident, 'created_time') and incident.created_time:
 
-                            incident_time = None
+                        incident_time = None
+
+                        if created_after and hasattr(incident, 'created_time') and incident.created_time:
                             if isinstance(incident.created_time, datetime):
                                 incident_time = incident.created_time
                             elif isinstance(incident.created_time, str):
