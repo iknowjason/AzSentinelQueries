@@ -332,10 +332,8 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-
                         incident_time = None
-
-                        if created_after and hasattr(incident, 'created_time') and incident.created_time:
+                        if hasattr(incident, 'created_time') and incident.created_time:
                             if isinstance(incident.created_time, datetime):
                                 incident_time = incident.created_time
                             elif isinstance(incident.created_time, str):
@@ -344,9 +342,18 @@ class SentinelTestFramework:
                                 except:
                                     print(f"Warning: Could not parse incident created time: {incident.created_time}")
                 
-                        if incident_time and incident_time.replace(tzinfo=None) < created_after:
-                            print(f"Skipping previously created incident: {incident.title}")
-                            continue
+                        if created_after:
+                            if not incident_time or incident_time.replace(tzinfo=None) < created_after:
+                                print(f"Skipping incident created before test: {incident.title}")
+                                continue
+
+                            time_window = 5 * 60
+                            time_since_test = (datetime.utcnow() - created_after).total_seconds()
+                            if time_since_test > time_window:
+                                time_threshold = created_after + timedelta(seconds=time_window)
+                                if incident_time.replace(tzinfo=None) > time_threshold:
+                                    print(f"Skipping incident created too long after test: {incident.title}")
+                                    continue
 
                         if incident.title:
                             print(rule_display_name)
