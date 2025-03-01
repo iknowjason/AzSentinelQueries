@@ -337,7 +337,7 @@ class SentinelTestFramework:
                         print(rule_display_name)
                         if incident.title:
                             # JASON
-                            if test_rule_name in incident.title:
+                            if rule_display_name in incident.title:
                                 print(f"Found matching incident: {incident.title}") 
                                 incidents_found.append({
                                     "title": incident.title,
