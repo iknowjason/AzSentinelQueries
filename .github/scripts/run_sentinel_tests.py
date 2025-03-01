@@ -363,9 +363,9 @@ class SentinelTestFramework:
                     for incident in incidents_list:
                         if incident.title:
 
-			    test_rule_name = None
+                            test_rule_name = None
                             if 'displayName' in test_rule:
-  			        test_rule_name = test_rule['displayName']
+                                test_rule_name = test_rule['displayName']
 			    elif 'name' in test_rule:
   			        test_rule_name = f"TEST - {test_rule['name']}"
 
