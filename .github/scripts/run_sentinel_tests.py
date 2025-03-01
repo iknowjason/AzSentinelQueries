@@ -22,9 +22,9 @@ SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID")
 RESOURCE_GROUP = os.environ.get("RESOURCE_GROUP")
 WORKSPACE_NAME = os.environ.get("WORKSPACE_NAME")
 
-# Log ingestion configuration - get these from environment variables for security
-ENDPOINT_URI = os.environ.get("ENDPOINT_URI")  # DCE endpoint
-DCR_IMMUTABLEID = os.environ.get("DCR_IMMUTABLEID")  # Data Collection Rule ID
+# Log ingestion configuration - get these from env for improved security
+ENDPOINT_URI = os.environ.get("ENDPOINT_URI")
+DCR_IMMUTABLEID = os.environ.get("DCR_IMMUTABLEID")
 TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
 CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
