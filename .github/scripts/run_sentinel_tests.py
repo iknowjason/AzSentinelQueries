@@ -361,19 +361,25 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        # Check if incident is related to our test rule
-                        if incident.title and rule_id in incident.title:
-                            print(f"Found incident from rule {rule_id}: {incident.title}")
-                            incidents_found.append({
-                                "title": incident.title,
-                                "id": incident.name,
-                                "severity": incident.severity,
-                                "status": incident.status,
-                                "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
-                            })
-                            return True, incidents_found
+                        if incident.title:
+
+			    test_rule_name = None
+                            if 'displayName' in test_rule:
+  			        test_rule_name = test_rule['displayName']
+			    elif 'name' in test_rule:
+  			        test_rule_name = f"TEST - {test_rule['name']}"
+
+			    if test_rule_name in incident.title:
+			        print(f"Found matching incident: {incident.title}") 
+                                incidents_found.append({
+                                    "title": incident.title,
+                                    "id": incident.name,
+                                    "severity": incident.severity,
+                                    "status": incident.status,
+                                    "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
+                                })
+                                return True, incidents_found
                         elif hasattr(incident, 'alert_ids') and incident.alert_ids:
-                            # Check if any alert IDs match our rule ID pattern
                             for alert_id in incident.alert_ids:
                                 if rule_id in alert_id:
                                     print(f"Found incident with matching alert ID: {incident.title}")
