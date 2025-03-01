@@ -512,7 +512,8 @@ class SentinelTestFramework:
             
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
-            time.sleep(310)
+            #time.sleep(310)
+            time.sleep(30)
 
             found_alert, incidents_detail = self.check_for_alerts(
                 test_rule_id,
