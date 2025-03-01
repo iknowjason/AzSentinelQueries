@@ -337,8 +337,8 @@ class SentinelTestFramework:
             print(f"Rule creation payload: {json.dumps({k: v for k, v in test_rule.items() if k != 'query'}, indent=2)}")
             raise
 
-    def check_for_alerts(self, rule_id, timeout=120):
-        """Check if rule generated any alerts/incidents and return details"""
+    #def check_for_alerts(self, rule_id, timeout=120):
+    def check_for_alerts(self, rule_id, rule_display_name=None, timeout=20):
         print(f"Checking for incidents related to rule: {rule_id}")
         start_time = time.time()
         incidents_found = []
@@ -361,14 +361,9 @@ class SentinelTestFramework:
                     for incident in incidents_list:
                         #print(incident)
                         print(incident.title)
+                        print(rule_display_name)
                         if incident.title:
                             # JASON
-                            test_rule_name = None
-                            if 'displayName' in test_rule:
-                                test_rule_name = test_rule['displayName']
-                            elif 'name' in test_rule:
-                                test_rule_name = f"TEST - {test_rule['name']}"
-
                             if test_rule_name in incident.title:
                                 print(f"Found matching incident: {incident.title}") 
                                 incidents_found.append({
@@ -379,6 +374,8 @@ class SentinelTestFramework:
                                     "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
                                 })
                                 return True, incidents_found
+                            else:
+                                print("Incident title doesn't match rule display name") 
                         elif hasattr(incident, 'alert_ids') and incident.alert_ids:
                             for alert_id in incident.alert_ids:
                                 if rule_id in alert_id:
@@ -600,10 +597,16 @@ class SentinelTestFramework:
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
             print(f"Rule should run multiple times in this period")
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
-            time.sleep(360)  
+            time.sleep(330)
+
+            rule_display_name = None
+            if 'displayName' in test_rule:
+                rule_display_name = test_rule['displayName']
+            elif 'name' in rule_def:
+                rule_display_name = f"TEST - {rule_def['name']}"
             
             # Check for alerts
-            found_alert, incidents_detail = self.check_for_alerts(test_rule_id)
+            found_alert, incidents_detail = self.check_for_alerts(test_rule_id, rule_display_name)
             
             # Evaluate test result
             expected_alert = test_case['expected_result'] == 'alert'
