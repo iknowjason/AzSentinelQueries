@@ -58,11 +58,11 @@ class SentinelTestFramework:
         return glob.glob("tests/*.yaml")
 
     def load_test_config(self, test_file):
-        """Load test configuration from YAML file"""
         try:
             with open(test_file, 'r') as file:
                 config = yaml.safe_load(file)
                 print(f"Loaded test configuration: {json.dumps(config, indent=2)}")
+                print("Loaded test configuration")
                 return config
         except Exception as e:
             print(f"Error loading test file {test_file}: {e}")
@@ -75,7 +75,8 @@ class SentinelTestFramework:
         try:
             with open(f"custom/{rule_file}", 'r') as file:
                 rule_def = yaml.safe_load(file)
-                print(f"Loaded rule definition: {json.dumps(rule_def, indent=2)}")
+                #print(f"Loaded rule definition: {json.dumps(rule_def, indent=2)}")
+                print("Loaded rule definition")
                 return rule_def
         except Exception as e:
             print(f"Error loading rule file {rule_file}: {e}")
@@ -91,7 +92,6 @@ class SentinelTestFramework:
             lines[0] = lines[0].replace('Event', test_table, 1)
             return '\n'.join(lines)
             
-        # More generic approach for other queries
         common_patterns = [
             r'^\s*(\w+)', # First word in the query is often the table
             r'from\s+(\w+)',  # from Table
@@ -111,12 +111,10 @@ class SentinelTestFramework:
                     modified = re.sub(pattern, test_table, query, count=1)
                     return modified
         
-        # If we can't confidently identify the table, return the original query
         print("WARNING: Could not detect table name in query, returning original")
         return query
 
     def convert_duration_to_iso8601(self, duration_str):
-        """Convert duration strings like '30m', '1h', '1d' to ISO8601 format."""
         if not duration_str or not isinstance(duration_str, str):
             return duration_str
             
@@ -153,6 +151,7 @@ class SentinelTestFramework:
         return operator_map.get(operator, operator)
 
     def ingest_test_data(self, table_name, data_file):
+        print("Start ingesting test data")
         test_data = ""
         with open(f"test_data/{data_file}", 'r') as file:
             test_data = json.load(file)
@@ -185,32 +184,23 @@ class SentinelTestFramework:
             raise
 
     def clone_rule_for_testing(self, rule_def, test_table):
-        """Create a clone of the production rule pointing to test table"""
-        # Create modified rule with standardized field names for Sentinel API
         test_rule = {}
         
-        # Map from Detection as Code format to Sentinel API expected format
-        # First, copy all fields from the original definition
         for key, value in rule_def.items():
             test_rule[key] = value
             
-        # Handle ID field - use original if present or generate a new one
         if 'id' in rule_def:
-            # Add timestamp to ensure uniqueness
             test_rule['id'] = f"test_{rule_def['id']}_{int(time.time())}"
         else:
             test_rule['id'] = f"test_rule_{int(time.time())}"
             
-        # Handle display name field
         if 'name' in rule_def:
-            # Your rule uses 'name' for display name
             test_rule['displayName'] = f"TEST - {rule_def['name']}"
         elif 'displayName' in rule_def:
             test_rule['displayName'] = f"TEST - {rule_def['displayName']}"
         else:
             test_rule['displayName'] = f"TEST - Generated Rule {int(time.time())}"
         
-        # Update query to use test table
         if 'query' in rule_def:
             modified_query = self.replace_table_in_query(rule_def['query'], test_table)
             test_rule['query'] = modified_query
@@ -218,43 +208,35 @@ class SentinelTestFramework:
             print("ERROR: Could not find 'query' field in rule definition")
             raise ValueError("Rule definition must contain a query field")
             
-        # Always set a fast query frequency and period for testing
         test_rule['queryFrequency'] = 'PT5M'  
         test_rule['queryPeriod'] = 'PT5M' 
         print("Set queryFrequency and queryPeriod to 5 minutes (minimum allowed)")
             
-        # Convert duration fields to ISO8601 format (for any other duration fields still in the rule)
         duration_fields = ['suppressionDuration']
         for field in duration_fields:
             if field in test_rule:
                 test_rule[field] = self.convert_duration_to_iso8601(test_rule[field])
                 print(f"Converted {field}: {rule_def.get(field, '')} -> {test_rule[field]}")
                 
-        # Convert trigger operator if needed
         if 'triggerOperator' in test_rule:
             test_rule['triggerOperator'] = self.convert_trigger_operator(test_rule['triggerOperator'])
             print(f"Trigger operator: {test_rule['triggerOperator']}")
             
-        # Handle incident configuration lookback duration
         if 'incidentConfiguration' in test_rule and 'groupingConfiguration' in test_rule['incidentConfiguration']:
             if 'lookbackDuration' in test_rule['incidentConfiguration']['groupingConfiguration']:
                 lookback = test_rule['incidentConfiguration']['groupingConfiguration']['lookbackDuration']
                 test_rule['incidentConfiguration']['groupingConfiguration']['lookbackDuration'] = self.convert_duration_to_iso8601(lookback)
                 
-        # Print the mapped fields for debugging
         print(f"Original 'name': {rule_def.get('name')}")
         print(f"Mapped 'displayName': {test_rule.get('displayName')}")
         print(f"Original 'id': {rule_def.get('id')}")
         print(f"Mapped 'id': {test_rule.get('id')}")
         
-        # Ensure all required fields are present for creating the rule
-        # Standard fields required by the Sentinel API
         required_fields = [
             'displayName', 'query', 'queryFrequency', 'queryPeriod',
             'severity', 'triggerOperator', 'triggerThreshold'
         ]
         
-        # Set defaults for missing fields if needed
         defaults = {
             'severity': 'Medium',
             'triggerOperator': 'GreaterThan',
@@ -267,18 +249,14 @@ class SentinelTestFramework:
                 print(f"Adding default value for missing field '{field}': {default_value}")
                 test_rule[field] = default_value
         
-        # Check if any required fields are still missing
         missing_fields = [field for field in required_fields if field not in test_rule]
         if missing_fields:
             print(f"ERROR: Still missing required fields for rule creation: {missing_fields}")
             raise ValueError(f"Cannot create rule without required fields: {missing_fields}")
             
-        # Create/update the test rule
         try:
-            # Check available attributes in sentinel_client to help debug
             print(f"Available client attributes: {dir(self.sentinel_client)}")
             
-            # Try different method names based on SDK version
             if hasattr(self.sentinel_client, 'scheduled_analytics_rules'):
                 response = self.sentinel_client.scheduled_analytics_rules.create_or_update(
                     resource_group_name=RESOURCE_GROUP,
@@ -302,16 +280,13 @@ class SentinelTestFramework:
                     alert_rule=test_rule
                 )
             else:
-                # Try using direct REST API call as fallback
                 print("Could not find appropriate SDK method, attempting direct API call")
                 from azure.mgmt.resource import ResourceManagementClient
                 import requests
                 
-                # Get the access token for direct API call
                 token = self.credential.get_token("https://management.azure.com/.default").token
                 api_version = "2022-09-01-preview"  # Adjust version as needed
                 
-                # Construct the URL for the create/update action
                 url = (
                     f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
                     f"/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}"
@@ -333,7 +308,6 @@ class SentinelTestFramework:
             return test_rule['id']
         except Exception as e:
             print(f"Error creating test rule: {e}")
-            # Print more details about what was sent
             print(f"Rule creation payload: {json.dumps({k: v for k, v in test_rule.items() if k != 'query'}, indent=2)}")
             raise
 
@@ -359,7 +333,6 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        #print(incident)
                         print(incident.title)
                         print(rule_display_name)
                         if incident.title:
@@ -414,14 +387,11 @@ class SentinelTestFramework:
                             })
                             return True, incidents_found
                 
-                # If neither API is available, try using direct REST API call
                 else:
-                    # Try direct REST API call
                     import requests
                     token = self.credential.get_token("https://management.azure.com/.default").token
                     api_version = "2022-09-01-preview"
                     
-                    # First try incidents
                     incidents_url = (
                         f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
                         f"/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}"
@@ -455,7 +425,7 @@ class SentinelTestFramework:
                         print(f"Warning: Failed to get incidents via direct API: {response.status_code}")
                 
                 print("No matching incidents found yet, waiting")
-                time.sleep(15)
+                time.sleep(3)
                 
             except Exception as e:
                 print(f"Error checking for incidents: {e}")
@@ -536,7 +506,6 @@ class SentinelTestFramework:
             print(f"\n=== Running test: {test_file} ===")
             test_config = self.load_test_config(test_file)
             
-            # Load production rule
             try:
                 prod_rule = self.load_production_rule(test_config['production_rule'])
             except Exception as e:
@@ -583,15 +552,18 @@ class SentinelTestFramework:
             exit(1)
             
     def _run_test_case(self, test_case, prod_rule, test_config, test_result, results):
-        """Run an individual test case"""
         print(f"\nRunning test case: {test_case['name']}")
         test_rule_id = None
+        rule_display_name = None
         
         try:
-            # Clone rule first to be ready before data ingestion
+            if 'displayName' in prod_rule:
+                rule_display_name = f"TEST - {prod_rule['displayName']}"
+            elif 'name' in prod_rule:
+                rule_display_name = f"TEST - {prod_rule['name']}"
+
             test_rule_id = self.clone_rule_for_testing(prod_rule, test_config['test_table'])
             
-            # Ingest test data
             self.ingest_test_data(test_config['test_table'], test_case['data_file'])
             
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
@@ -599,16 +571,8 @@ class SentinelTestFramework:
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
             time.sleep(330)
 
-            rule_display_name = None
-            if 'displayName' in test_rule:
-                rule_display_name = test_rule['displayName']
-            elif 'name' in rule_def:
-                rule_display_name = f"TEST - {rule_def['name']}"
-            
-            # Check for alerts
             found_alert, incidents_detail = self.check_for_alerts(test_rule_id, rule_display_name)
             
-            # Evaluate test result
             expected_alert = test_case['expected_result'] == 'alert'
             case_passed = found_alert == expected_alert
             
@@ -639,10 +603,8 @@ class SentinelTestFramework:
             })
         
         finally:
-            # Note but don't delete the test rule
             if test_rule_id:
                 self.cleanup_test_rule(test_rule_id)
-
 
 if __name__ == "__main__":
 
