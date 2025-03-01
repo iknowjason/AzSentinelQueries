@@ -359,7 +359,8 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        print(incident)
+                        #print(incident)
+                        print(incident.title)
                         if incident.title:
                             # JASON
                             test_rule_name = None
@@ -456,12 +457,12 @@ class SentinelTestFramework:
                     else:
                         print(f"Warning: Failed to get incidents via direct API: {response.status_code}")
                 
-                print("No matching incidents found yet, waiting...")
+                print("No matching incidents found yet, waiting")
                 time.sleep(15)
                 
             except Exception as e:
                 print(f"Error checking for incidents: {e}")
-                time.sleep(15)
+                #time.sleep(15)
         
         print(f"No matching incidents found after {timeout} seconds")
         return False, incidents_found
