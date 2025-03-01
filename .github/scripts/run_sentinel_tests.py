@@ -177,7 +177,7 @@ class SentinelTestFramework:
             )
             print(f"Successfully ingested test data from {data_file} into {table_name}")
             print("Waiting for logs to be processed")
-            time.sleep(60) 
+            time.sleep(10) 
             
         except HttpResponseError as e:
             print(f"Failed to ingest test data: {e}")
@@ -311,8 +311,7 @@ class SentinelTestFramework:
             print(f"Rule creation payload: {json.dumps({k: v for k, v in test_rule.items() if k != 'query'}, indent=2)}")
             raise
 
-    #def check_for_alerts(self, rule_id, timeout=120):
-    def check_for_alerts(self, rule_id, rule_display_name=None, timeout=20):
+    def check_for_alerts(self, rule_id, rule_display_name=None, timeout=5, created_after=None):
         print(f"Checking for incidents related to rule: {rule_id}")
         start_time = time.time()
         incidents_found = []
@@ -333,10 +332,20 @@ class SentinelTestFramework:
                         print(f"Found {len(incidents_list)} incidents, checking for matches")
                         
                     for incident in incidents_list:
-                        print(incident.title)
-                        print(rule_display_name)
+
+                        if created_after and hasattr(incident, 'created_time') and incident.created_time:
+                            incident_time = incident.created_time
+                            if isinstance(incident_time, str):
+                                try:
+                                    incident_time = datetime.fromisoformat(incident_time.replace('Z', '+00:00'))
+                                except:
+                                    incident_time = None
+                
+                        if incident_time and incident_time.replace(tzinfo=None) < created_after:
+                            print(f"Skipping previously created incident: {incident.title}")
+                            continue
+
                         if incident.title:
-                            # JASON
                             if rule_display_name in incident.title:
                                 print(f"Found matching incident: {incident.title}") 
                                 incidents_found.append({
@@ -349,87 +358,13 @@ class SentinelTestFramework:
                                 return True, incidents_found
                             else:
                                 print("Incident title doesn't match rule display name") 
-                        elif hasattr(incident, 'alert_ids') and incident.alert_ids:
-                            for alert_id in incident.alert_ids:
-                                if rule_id in alert_id:
-                                    print(f"Found incident with matching alert ID: {incident.title}")
-                                    incidents_found.append({
-                                        "title": incident.title,
-                                        "id": incident.name,
-                                        "severity": incident.severity,
-                                        "status": incident.status,
-                                        "created_time": str(incident.created_time) if hasattr(incident, 'created_time') else "Unknown"
-                                    })
-                                    return True, incidents_found
-                
-                elif hasattr(self.sentinel_client, 'alerts'):
-                    alerts = self.sentinel_client.alerts.list(
-                        resource_group_name=RESOURCE_GROUP,
-                        workspace_name=WORKSPACE_NAME
-                    )
-                    
-                    alerts_list = list(alerts)
-                    
-                    if not alerts_list:
-                        print("No alerts found yet")
-                    else:
-                        print(f"Found {len(alerts_list)} alerts, checking for matches")
-                        
-                    for alert in alerts_list:
-                        if alert.alert_display_name and rule_id in alert.alert_display_name:
-                            print(f"Found alert from rule {rule_id}: {alert.alert_display_name}")
-                            incidents_found.append({
-                                "title": alert.alert_display_name,
-                                "id": alert.name if hasattr(alert, 'name') else "Unknown",
-                                "severity": alert.alert_severity if hasattr(alert, 'alert_severity') else "Unknown",
-                                "status": "New",
-                                "created_time": str(alert.start_time) if hasattr(alert, 'start_time') else "Unknown"
-                            })
-                            return True, incidents_found
-                
-                else:
-                    import requests
-                    token = self.credential.get_token("https://management.azure.com/.default").token
-                    api_version = "2022-09-01-preview"
-                    
-                    incidents_url = (
-                        f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
-                        f"/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}"
-                        f"/providers/Microsoft.SecurityInsights/incidents?api-version={api_version}"
-                    )
-                    
-                    headers = {
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json"
-                    }
-                    
-                    response = requests.get(incidents_url, headers=headers)
-                    
-                    if response.status_code == 200:
-                        incidents_data = response.json()
-                        if 'value' in incidents_data and incidents_data['value']:
-                            for incident in incidents_data['value']:
-                                if 'properties' in incident and 'title' in incident['properties']:
-                                    title = incident['properties']['title']
-                                    if rule_id in title:
-                                        print(f"Found incident from rule {rule_id}: {title}")
-                                        incidents_found.append({
-                                            "title": title,
-                                            "id": incident.get('name', 'Unknown'),
-                                            "severity": incident.get('properties', {}).get('severity', 'Unknown'),
-                                            "status": incident.get('properties', {}).get('status', 'Unknown'),
-                                            "created_time": incident.get('properties', {}).get('createdTimeUtc', 'Unknown')
-                                        })
-                                        return True, incidents_found
-                    else:
-                        print(f"Warning: Failed to get incidents via direct API: {response.status_code}")
                 
                 print("No matching incidents found yet, waiting")
-                time.sleep(3)
+                time.sleep(2)
                 
             except Exception as e:
                 print(f"Error checking for incidents: {e}")
-                #time.sleep(15)
+                time.sleep(2)
         
         print(f"No matching incidents found after {timeout} seconds")
         return False, incidents_found
@@ -521,17 +456,17 @@ class SentinelTestFramework:
             # Organize test cases into positive and negative tests
             positive_cases = [tc for tc in test_config['test_cases'] if tc['expected_result'] == 'alert']
             negative_cases = [tc for tc in test_config['test_cases'] if tc['expected_result'] == 'no_alert']
-            
-            # Run positive test cases first
-            if positive_cases:
-                print("\n=== Running Positive Test Cases (expected to trigger alerts) ===")
-                for test_case in positive_cases:
-                    self._run_test_case(test_case, prod_rule, test_config, test_result, results)
-            
-            # Then run negative test cases
+        
+            # Run negative test cases first 
             if negative_cases:
                 print("\n=== Running Negative Test Cases (expected NOT to trigger alerts) ===")
                 for test_case in negative_cases:
+                    self._run_test_case(test_case, prod_rule, test_config, test_result, results)
+    
+            # Then run positive 
+            if positive_cases:
+                print("\n=== Running Positive Test Cases (expected to trigger alerts) ===")
+                for test_case in positive_cases:
                     self._run_test_case(test_case, prod_rule, test_config, test_result, results)
             
             results["tests"].append(test_result)
@@ -557,6 +492,11 @@ class SentinelTestFramework:
         rule_display_name = None
         
         try:
+
+            # Record the time before injecting test data
+            test_start_time = datetime.utcnow()
+            print(f"Test start time: {test_start_time.isoformat()}")
+
             if 'displayName' in prod_rule:
                 rule_display_name = f"TEST - {prod_rule['displayName']}"
             elif 'name' in prod_rule:
@@ -569,9 +509,13 @@ class SentinelTestFramework:
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
             print(f"Rule should run multiple times in this period")
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
-            time.sleep(330)
+            time.sleep(310)
 
-            found_alert, incidents_detail = self.check_for_alerts(test_rule_id, rule_display_name)
+            found_alert, incidents_detail = self.check_for_alerts(
+                test_rule_id,
+                rule_display_name,
+                created_after=test_start_time if test_case['expected_result'] == 'no_alert' else None
+            )
             
             expected_alert = test_case['expected_result'] == 'alert'
             case_passed = found_alert == expected_alert
