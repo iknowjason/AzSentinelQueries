@@ -383,9 +383,6 @@ class SentinelTestFramework:
 
     def cleanup_test_rule(self, rule_id):
         """Clean up the test rule after testing"""
-        print(f"NOTICE: Test rule {rule_id} was NOT deleted for manual inspection")
-        print(f"Please manually delete or disable this rule after inspection")
-        
         try:
             if hasattr(self.sentinel_client, 'scheduled_analytics_rules'):
                 self.sentinel_client.scheduled_analytics_rules.delete(
