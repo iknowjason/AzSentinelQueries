@@ -344,7 +344,7 @@ class SentinelTestFramework:
                 
                         if created_after:
                             if not incident_time or incident_time.replace(tzinfo=None) < created_after:
-                                print(f"Skipping incident created before test: {incident.title}")
+                                #print(f"Skipping incident created before test: {incident.title}")
                                 continue
 
                             time_window = 5 * 60
@@ -352,7 +352,7 @@ class SentinelTestFramework:
                             if time_since_test > time_window:
                                 time_threshold = created_after + timedelta(seconds=time_window)
                                 if incident_time.replace(tzinfo=None) > time_threshold:
-                                    print(f"Skipping incident created too long after test: {incident.title}")
+                                    #print(f"Skipping incident created too long after test: {incident.title}")
                                     continue
 
                         if incident.title:
@@ -385,10 +385,8 @@ class SentinelTestFramework:
         """Clean up the test rule after testing"""
         print(f"NOTICE: Test rule {rule_id} was NOT deleted for manual inspection")
         print(f"Please manually delete or disable this rule after inspection")
-        # Commented out cleanup for manual inspection purposes
-        '''
+        
         try:
-            # Try different method names based on SDK version
             if hasattr(self.sentinel_client, 'scheduled_analytics_rules'):
                 self.sentinel_client.scheduled_analytics_rules.delete(
                     resource_group_name=RESOURCE_GROUP,
@@ -402,16 +400,13 @@ class SentinelTestFramework:
                     rule_id=rule_id
                 )
             else:
-                # Try using direct REST API call as fallback
                 print("Could not find appropriate SDK method for deleting rule, attempting direct API call")
                 from azure.core.exceptions import HttpResponseError
                 import requests
                 
-                # Get the access token for direct API call
                 token = self.credential.get_token("https://management.azure.com/.default").token
                 api_version = "2022-09-01-preview"  # Adjust version as needed
                 
-                # Construct the URL for the delete action
                 url = (
                     f"https://management.azure.com/subscriptions/{SUBSCRIPTION_ID}/resourceGroups/{RESOURCE_GROUP}"
                     f"/providers/Microsoft.OperationalInsights/workspaces/{WORKSPACE_NAME}"
@@ -432,8 +427,6 @@ class SentinelTestFramework:
             print(f"Deleted test rule: {rule_id}")
         except Exception as e:
             print(f"Warning: Failed to delete test rule {rule_id}: {e}")
-            # Continue execution even if cleanup fails
-        '''
 
     def run_tests(self):
         """Run all tests"""
