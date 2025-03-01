@@ -366,11 +366,11 @@ class SentinelTestFramework:
                             test_rule_name = None
                             if 'displayName' in test_rule:
                                 test_rule_name = test_rule['displayName']
-			    elif 'name' in test_rule:
-  			        test_rule_name = f"TEST - {test_rule['name']}"
+                            elif 'name' in test_rule:
+                                test_rule_name = f"TEST - {test_rule['name']}"
 
-			    if test_rule_name in incident.title:
-			        print(f"Found matching incident: {incident.title}") 
+                            if test_rule_name in incident.title:
+                                print(f"Found matching incident: {incident.title}") 
                                 incidents_found.append({
                                     "title": incident.title,
                                     "id": incident.name,
