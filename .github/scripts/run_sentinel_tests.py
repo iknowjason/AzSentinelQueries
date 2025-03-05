@@ -17,7 +17,7 @@ from azure.mgmt.securityinsight import SecurityInsights
 from azure.monitor.ingestion import LogsIngestionClient
 from azure.core.exceptions import HttpResponseError
 
-# Environment configuration
+# Env configuration
 SUBSCRIPTION_ID = os.environ.get("AZURE_SUBSCRIPTION_ID")
 RESOURCE_GROUP = os.environ.get("RESOURCE_GROUP")
 WORKSPACE_NAME = os.environ.get("WORKSPACE_NAME")
@@ -383,6 +383,7 @@ class SentinelTestFramework:
 
     def cleanup_test_rule(self, rule_id):
         """Clean up the test rule after testing"""
+        print("Cleaning up the test rule by removing it")
         try:
             if hasattr(self.sentinel_client, 'scheduled_analytics_rules'):
                 self.sentinel_client.scheduled_analytics_rules.delete(
@@ -509,8 +510,9 @@ class SentinelTestFramework:
             
             print(f"Waiting for rule {test_rule_id} to execute on its schedule (queryFrequency: PT5M)")
             print("Waiting for rule to execute at least once (with 5-minute frequency)")
-            #time.sleep(310)
-            time.sleep(30)
+            time.sleep(310)
+            #time.sleep(30)
+
 
             found_alert, incidents_detail = self.check_for_alerts(
                 test_rule_id,
