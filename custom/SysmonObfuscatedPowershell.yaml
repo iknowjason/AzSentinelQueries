@@ -4,8 +4,8 @@ version: 1.0.0
 kind: Scheduled
 description: Detects obfuscated PowerShell command lines by monitoring for multiple escape characters (backticks, percent signs, and carets) that may indicate malicious obfuscation attempts.
 severity: High
-queryFrequency: 30m
-queryPeriod: 30m
+queryFrequency: 5m
+queryPeriod: 5m
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
